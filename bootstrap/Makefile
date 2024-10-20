@@ -48,7 +48,7 @@ watch-assets:
 
 # run esbuild to generate the index.js bundle in watch mode.
 watch-esbuild:
-	@npx esbuild app/assets/index.js --bundle --outdir=public/assets --watch
+	@npx esbuild app/assets/index.js --bundle --outdir=public/assets --watch=forever
 
 # watch for any js or css change in the assets/ folder, then reload the browser via templ proxy.
 sync_assets:
@@ -83,3 +83,8 @@ db-mig-create:
 
 db-seed:
 	@go run cmd/scripts/seed/main.go
+
+setup:
+	@npm install
+	@go generate ./...
+	@go clean -modcache && go get -u ./...

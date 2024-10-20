@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io/fs"
 	"log"
@@ -23,23 +24,31 @@ func main() {
 	args := os.Args[1:]
 
 	if len(args) == 0 {
-		fmt.Println()
-		fmt.Println("install requires your project name as the first argument")
-		fmt.Println()
-		fmt.Println("\tgo run superkit/install.go [your_project_name]")
-		fmt.Println()
-		os.Exit(1)
+		usage()
+	}
+	var projectPath string
+	projectName := args[0]
+	installPath := ""
+
+	if args[1] != "" {
+		installPath = args[1]
+		// validate install path
+		if _, err := os.Stat(installPath); errors.Is(err, fs.ErrNotExist) {
+			log.Fatal("install path does not exist")
+		}
+		// check if project folder already exists
+		if _, err := os.Stat(path.Join(installPath, projectName)); !os.IsNotExist(err) {
+			log.Fatal("project folder already exists")
+		}
 	}
 
-	projectName := args[0]
+	projectPath = path.Join(installPath, projectName)
 
 	// check if superkit folder already exists, if so, delete
 	_, err := os.Stat("superkit")
 	if !os.IsNotExist(err) {
 		fmt.Println("-- deleting superkit folder cause its already present")
-		if err := os.RemoveAll("superkit"); err != nil {
-			log.Fatal(err)
-		}
+		cleanUp()
 	}
 
 	fmt.Println("-- cloning", reponame)
@@ -49,11 +58,11 @@ func main() {
 	}
 
 	fmt.Println("-- renaming bootstrap ->", projectName)
-	if err := os.Rename(path.Join("superkit", bootstrapFolderName), projectName); err != nil {
+	if err := os.Rename(path.Join("superkit", bootstrapFolderName), projectPath); err != nil {
 		log.Fatal(err)
 	}
 
-	err = filepath.Walk(path.Join(projectName), func(fullPath string, info fs.FileInfo, err error) error {
+	err = filepath.Walk(path.Join(projectPath), func(fullPath string, info fs.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
@@ -87,14 +96,14 @@ func main() {
 
 	fmt.Println("-- renaming .env.local -> .env")
 	if err := os.Rename(
-		path.Join(projectName, ".env.local"),
-		path.Join(projectName, ".env"),
+		path.Join(projectPath, ".env.local"),
+		path.Join(projectPath, ".env"),
 	); err != nil {
 		log.Fatal(err)
 	}
 
 	fmt.Println("-- generating secure secret")
-	pathToDotEnv := path.Join(projectName, ".env")
+	pathToDotEnv := path.Join(projectPath, ".env")
 	b, err := os.ReadFile(pathToDotEnv)
 	if err != nil {
 		log.Fatal(err)
@@ -110,7 +119,13 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Printf("-- project (%s) successfully installed!\n", projectName)
+	fmt.Printf("-- project (%s) successfully installed!\n", projectPath)
+
+	// if err := checkDevDependencies(); err != nil {
+	// 	fmt.Println(err)
+	// }
+
+	cleanUp()
 }
 
 func generateSecret() string {
@@ -119,4 +134,47 @@ func generateSecret() string {
 		log.Fatal(err)
 	}
 	return hex.EncodeToString(bytes)
+}
+
+// checkDevDependencies checks if the required dev dependencies are installed
+func checkDevDependencies() error {
+	deps := []string{"npm", "templ"}
+	missingDeps := []string{}
+	for _, dep := range deps {
+		_, err := exec.LookPath(dep)
+		if err != nil {
+			missingDeps = append(missingDeps, dep)
+			continue
+		}
+		fmt.Printf("-- %s found\n", dep)
+	}
+	if len(missingDeps) > 0 {
+		return fmt.Errorf("missing dependencies: %v", missingDeps)
+		// fmt.Println("Please install the following dependencies:")
+		// for _, dep := range missingDeps {
+		// 	fmt.Println("\t", dep)
+		// }
+		// log.Fatal("Exiting...")
+		// os.Exit(1)
+	}
+	return nil
+}
+
+// cleanUp removes the superkit folder
+func cleanUp() {
+	if err := os.RemoveAll("superkit"); err != nil {
+		log.Fatal(err)
+	}
+}
+
+// usage prints the usage of the program
+func usage() {
+	fmt.Println()
+	fmt.Println("install requires your project name as the first argument")
+	fmt.Println("with optional path to install the project as the second argument")
+	fmt.Println()
+	fmt.Println("Usage:")
+	fmt.Println("\tgo run superkit/install.go [your_project_name] [optional_path_to_install_project]")
+	fmt.Println()
+	os.Exit(1)
 }

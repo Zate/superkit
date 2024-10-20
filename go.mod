@@ -2,6 +2,9 @@ module github.com/anthdm/superkit
 
 go 1.22.0
 
+// uncomment for local development on the superkit core.
+replace github.com/anthdm/superkit => ../
+
 require (
 	github.com/a-h/templ v0.2.731
 	github.com/gorilla/sessions v1.3.0
